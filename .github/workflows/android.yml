@@ -25,7 +25,10 @@ jobs:
           curl -fsSL -o www/lib/pdf.worker.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js
           curl -fsSL -o www/lib/jspdf.umd.min.js https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
           curl -fsSL -o www/lib/jszip.min.js https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js
-          sed -i 's#https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/#lib/#g; s#https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/#lib/#g; s#https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/#lib/#g' www/index.html
+          curl -fsSL -o www/lib/html2canvas.min.js https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js || echo skipped
+          curl -fsSL -o www/lib/docx-preview.min.js https://cdn.jsdelivr.net/npm/docx-preview@0.3.2/dist/docx-preview.min.js || echo skipped
+          curl -fsSL -o www/lib/pptx-preview.umd.js https://cdn.jsdelivr.net/npm/pptx-preview@1.0.5/dist/pptx-preview.umd.js || echo skipped
+          sed -i 's#https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/#lib/#g; s#https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/#lib/#g; s#https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/#lib/#g; s#https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/#lib/#g; s#https://cdn.jsdelivr.net/npm/docx-preview@0.3.2/dist/#lib/#g; s#https://cdn.jsdelivr.net/npm/pptx-preview@1.0.5/dist/#lib/#g' www/index.html
       - run: npm install
       - run: npx cap add android
       - name: Microphone permission
