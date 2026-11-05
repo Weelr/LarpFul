@@ -27,6 +27,27 @@ jobs:
           sed -i 's#https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/#lib/#g; s#https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/#lib/#g' www/index.html
       - run: npm install
       - run: npx cap add android
+      - name: Fullscreen immersive mode
+        run: |
+          F=$(find android/app/src/main/java -name MainActivity.java)
+          cat > $F <<'EOF'
+          package com.larpful.app;
+          import android.os.Bundle;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
+          import com.getcapacitor.BridgeActivity;
+          public class MainActivity extends BridgeActivity {
+            @Override public void onCreate(Bundle b){ super.onCreate(b); hide(); }
+            @Override public void onWindowFocusChanged(boolean f){ super.onWindowFocusChanged(f); if(f) hide(); }
+            private void hide(){
+              WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+              WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+              c.hide(WindowInsetsCompat.Type.systemBars());
+              c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+          }
+          EOF
       - run: npx cap sync android
       - name: Build debug APK
         working-directory: android
