@@ -2,6 +2,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.2/dist/docx-preview.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptx-preview@1.0.5/dist/pptx-preview.umd.js"></script>
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#fff;--p:#f2f2f7;--c:#fff;--t:#111;--s:#8e8e93;--a:#0a84ff;--l:#d8d8dc}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--p:#1c1c1e;--c:#2c2c2e;--t:#fff;--l:#38383a}}
@@ -213,15 +216,19 @@ document.addEventListener('change',e=>{const k=e.target.dataset?.k;if(!k)return;
 /* ---------- import → PDF → pages ---------- */
 const rd=(f,m)=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r['readAs'+m](f)});
 const ldImg=u=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=u});
+async function office(f,dx){const h=document.createElement('div');h.style.cssText='position:fixed;left:-99999px;top:0;background:#fff';document.body.append(h);try{if(!window.html2canvas)return null;const ab=await f.arrayBuffer();let els=[];
+if(dx){if(!window.docx)return null;await docx.renderAsync(ab,h,null,{breakPages:true});els=[...h.querySelectorAll('section.docx')]}
+else{if(!window.pptxPreview)return null;await pptxPreview.init(h,{width:960,height:540}).preview(ab);const w=h.querySelector('.pptx-preview-wrapper')||h.firstElementChild;els=w?[...w.children]:[]}
+const out=[];for(const e of els)out.push(await html2canvas(e,{scale:2,backgroundColor:'#fff',useCORS:true}));return out}catch(e){console.error(e);return null}finally{h.remove()}}
 async function imp(f){toast('Converting to PDF…');try{let buf;const ty=f.type,n=f.name;
 if(ty==='application/pdf'||/\.pdf$/i.test(n))buf=await f.arrayBuffer();
 else if(window.jspdf){const d=new jspdf.jsPDF({unit:'pt',format:'a4'});
 if(ty.startsWith('image/')){const im=await ldImg(await rd(f,'DataURL')),c=document.createElement('canvas');c.width=im.width;c.height=im.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0);let w=595,h=im.height*w/im.width;if(h>842){h=842;w=im.width*h/im.height}d.addImage(c.toDataURL('image/jpeg',.92),'JPEG',(595-w)/2,(842-h)/2,w,h)}
 else if(ty.startsWith('text/')||/\.(txt|md)$/i.test(n)){d.setFontSize(11);let y=50;for(const l of d.splitTextToSize(await f.text(),495)){if(y>800){d.addPage();y=50}d.text(l,50,y);y+=15}}
-else if(/\.(docx|pptx)$/i.test(n)){if(!window.JSZip)return toast('Converter not loaded (offline?)');const z=await JSZip.loadAsync(await f.arrayBuffer()),dec=t=>t.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&'),ex=(x,p,t)=>dec(x.split(p).map(q=>(q.match(new RegExp('<'+t+'(?: [^>]*)?>[^<]*</'+t+'>','g'))||[]).map(m=>m.replace(/<[^>]+>/g,'')).join('')).join('\n'));let pg=[];
+else if(/\.(docx|pptx)$/i.test(n)){const dx=/\.docx$/i.test(n),cv=await office(f,dx);if(cv&&cv.length&&cv.every(c=>c.width>10)){const W=dx?595:842,H=c=>c.height*W/c.width,d2=new jspdf.jsPDF({unit:'pt',format:[W,H(cv[0])]});cv.forEach((c,i)=>{if(i)d2.addPage([W,H(c)]);d2.addImage(c.toDataURL('image/jpeg',.9),'JPEG',0,0,W,H(c))});window.__ov=d2}else{if(!window.JSZip)return toast('Converter not loaded (offline?)');const z=await JSZip.loadAsync(await f.arrayBuffer()),dec=t=>t.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&'),ex=(x,p,t)=>dec(x.split(p).map(q=>(q.match(new RegExp('<'+t+'(?: [^>]*)?>[^<]*</'+t+'>','g'))||[]).map(m=>m.replace(/<[^>]+>/g,'')).join('')).join('\n'));let pg=[];
 if(/\.docx$/i.test(n))pg=[ex(await z.file('word/document.xml').async('string'),'</w:p>','w:t')];else{const ks=Object.keys(z.files).filter(k=>/^ppt\/slides\/slide\d+\.xml$/.test(k)).sort((a,b)=>a.match(/\d+/)-b.match(/\d+/));for(const k of ks)pg.push(ex(await z.file(k).async('string'),'</a:p>','a:t'))}
-d.setFontSize(11);pg.forEach((t,i)=>{if(i)d.addPage();let y=50;for(const l of d.splitTextToSize(t,495)){if(y>800){d.addPage();y=50}d.text(l,50,y);y+=15}})}
-else return toast('Unsupported type — use PDF, image, TXT, MD, DOCX or PPTX');buf=d.output('arraybuffer')}else return toast('PDF library not loaded (offline?)');
+d.setFontSize(11);pg.forEach((t,i)=>{if(i)d.addPage();let y=50;for(const l of d.splitTextToSize(t,495)){if(y>800){d.addPage();y=50}d.text(l,50,y);y+=15}})}}
+else return toast('Unsupported type — use PDF, image, TXT, MD, DOCX or PPTX');buf=(window.__ov||d).output('arraybuffer');window.__ov=null}else return toast('PDF library not loaded (offline?)');
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const pdf=await pdfjsLib.getDocument({data:buf}).promise,nb=mkNb(n.replace(/\.[^.]+$/,''),S.filter.startsWith('t:')?S.filter.slice(2):'');nb.pages=[];
 for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i),v1=pg.getViewport({scale:1}),v=pg.getViewport({scale:1588/v1.width}),c=document.createElement('canvas');c.width=v.width;c.height=v.height;await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;{const tc=await pg.getTextContent(),k=794/v.width,txt=tc.items.filter(it=>it.str.trim()).map(it=>{const m=pdfjsLib.Util.transform(v.transform,it.transform),h=Math.hypot(m[2],m[3]);return{s:it.str,x:m[4]*k,y:(m[5]-h)*k,w:it.width*v.scale*k,h:h*k}});nb.pages.push(mkPg({img:c,imgURL:c.toDataURL('image/jpeg',.82),h:794*v.height/v.width,txt}))}}
