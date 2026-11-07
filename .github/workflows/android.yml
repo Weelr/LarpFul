@@ -85,6 +85,16 @@ jobs:
             }
           }
           EOF
+      - name: App icon
+        run: |
+          R=android/app/src/main/res
+          rm -rf $R/mipmap-anydpi-v26
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p $R/mipmap-$d
+            cp resources/icons/${d}_ic_launcher.png $R/mipmap-$d/ic_launcher.png
+            cp resources/icons/${d}_ic_launcher_round.png $R/mipmap-$d/ic_launcher_round.png
+            rm -f $R/mipmap-$d/ic_launcher_foreground.png
+          done
       - run: npx cap sync android
       - name: Build debug APK
         working-directory: android
