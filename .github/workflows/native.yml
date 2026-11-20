@@ -1,0 +1,99 @@
+name: Build native Larpful
+on:
+  push:
+    branches: [main]
+    paths: ['native/**', '.github/workflows/native.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    working-directory: native
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Fetch the Word / PowerPoint renderers (bundled inside the app, used offline)
+        run: |
+          mkdir -p app/src/main/assets/conv
+          curl -fsSL -o app/src/main/assets/conv/jszip.min.js https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js || echo skipped
+          curl -fsSL -o app/src/main/assets/conv/docx-preview.min.js https://cdn.jsdelivr.net/npm/docx-preview@0.3.2/dist/docx-preview.min.js || echo skipped
+          curl -fsSL -o app/src/main/assets/conv/pptx-preview.umd.js https://cdn.jsdelivr.net/npm/pptx-preview@1.0.5/dist/pptx-preview.umd.js || echo skipped
+          ls -la app/src/main/assets/conv
+      - name: Build APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - run: cp app/build/outputs/apk/debug/app-debug.apk Larpful.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Larpful-native-apk
+          retention-days: 1
+          path: |
+            native/Larpful.apk
+      - name: Publish to Releases (direct APK download)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete native-latest --cleanup-tag -y || true
+          sleep 3
+          gh release create native-latest Larpful.apk --latest --target "$GITHUB_SHA" --title "Larpful — build ${GITHUB_RUN_NUMBER}" --notes ""
+      - name: Delete old workflow runs (keep only the latest build)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status == "completed") | .id' |
+          while read id; do
+            [ "$id" = "${{ github.run_id }}" ] && continue
+            gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$id" >/dev/null || true
+          done
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-runtime-4.13
+      - name: Automated smoke test (drives the app without a device)
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee gradle.log
+      - name: Save test output (log + screenshots) as a build file, not a release
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -v 'SHOT|' gradle.log | tail -c 600000 > ci-log.txt || echo "no log" > ci-log.txt
+          mkdir -p app/build/shots
+          (cd app/build && zip -qr ../../shots.zip shots)
+          gh release delete native-ci --cleanup-tag -y || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-output
+          retention-days: 1
+          path: |
+            native/ci-log.txt
+            native/shots.zip
